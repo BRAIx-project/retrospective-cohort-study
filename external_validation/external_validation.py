@@ -1,3 +1,5 @@
+import argparse
+from pathlib import Path
 import re
 import numpy as np
 import pandas as pd
@@ -14,18 +16,20 @@ FILES = [
     "data/CMMD_Episode.csv",
     "data/BREAST_Breast.csv",
     "data/BREAST_Episode.csv",
+    "data/ADMANI Prospective_Breast.csv",
+    "data/ADMANI Prospective_Episode.csv",
 ]
 
 
-def main():
+def main(args):
 
-    seed = 9837452
-    n_bootstraps = 2000
+    seed = args.seed
+    n_bootstraps = args.n
 
     outputs = []
     summary = []
     for f in FILES:
-        df = pd.read_csv(f, low_memory=False)
+        df = pd.read_csv(args.base_path / f, low_memory=False)
         ds_name, level = f.split('/')[-1].replace('.csv', '').split('_')
         print(ds_name, level)
         
@@ -50,9 +54,19 @@ def main():
     summary_tbl = summary.melt(id_vars=['Dataset', 'Episodes'], var_name='Labels', value_name="").groupby(['Dataset','Episodes', 'Labels'], sort=True).sum()
 
     # re-orders the labels
-    ix = [np.array([2, 0, 3, 1]) + (i*4) for i in [3,2,1,0]]
-    ix = np.array(ix).flatten().tolist()
-    summary_tbl = summary_tbl.reindex([summary_tbl.index.values[x] for x in ix])
+    LABEL_ORDER = ['CSAW-CC (screen-detected only)', 'CSAW-CC', 'CMMD', 'BREAST', 'ADMANI Prospective']
+    CATEGORY_ORDER = ['Normal', 'Benign', 'Screen-detected cancer', 'Interval cancer']
+
+    order = []
+    for label in LABEL_ORDER:
+        for cat in CATEGORY_ORDER:
+            for i, (a, b, c) in enumerate(summary_tbl.index.values):
+                if (a == label) and (c == cat):
+                    order.append((a, b, c))
+
+    summary_tbl = summary_tbl.reindex(order)
+
+    print(table)
 
     # print latex version for paper
     format_latex_table(table, summary_tbl)
@@ -108,27 +122,27 @@ def ci_str(m, l, u, decimal_places=3):
 def format_latex_table(results, summary_tbl):
     # formats to display in paper, read at own risk
     s = results.to_latex(multirow=True, multicolumn=True, header=True)
-    s = s.replace("       &         &    &             AI reader \\\\\n", "")
-    s = s.replace("\cline{1-6}\n\cline{2-6}\n\cline{3-6}\n\cline{4-6}\n", "\midrule\n")
+
+    lines = s.split('\n')
+    lines.pop(2)  # remove AI reader line
+    lines_str = '\n'.join(lines[:-1])
+
 
     labels = summary_tbl.reset_index().Labels.values[:4]
     datasets = summary_tbl.reset_index().Dataset.values[::4]
 
-    temp_s = s.split('\n')
     for i, dataset in enumerate(datasets[:]):
         vals = summary_tbl.loc[dataset].values.flatten()
-        for j, row in enumerate(s.split('\n')):
+        for j, row in enumerate(lines_str.split('\n')):
             if f"{dataset}}}" in row:
-                temp_s[j] = row.replace(r"& \m", f"& {labels[0]} & {vals[0]} & \m")
-                temp_s[j+1] = temp_s[j+1].replace("&         & ", f"& {labels[1]} & {vals[1]} & & ")
-                temp_s[j+3] = temp_s[j+3].replace(r"& \multi", f"& {labels[2]} & {vals[2]} & \multi")
-                temp_s[j+4] = temp_s[j+4].replace("&         & ", f"& {labels[3]} & {vals[3]} & & ")
-                if temp_s[j+6] == '\cline{2-4}':
-                    temp_s[j+6] = '\cline{2-6}'
+                lines[j] = row.replace(r"& \m", f"& {labels[0]} & {vals[0]} & \m")
+                lines[j+1] = re.sub('&([ \t])+&([ \t])+', f"& {labels[1]} & {vals[1]} & & ", lines[j+1])
+                lines[j+3] = lines[j+3].replace(r"& \multi", f"& {labels[2]} & {vals[2]} & \multi")
+                lines[j+4] = re.sub('&([ \t])+&([ \t])+', f"& {labels[3]} & {vals[3]} & & ", lines[j+4])
 
-    tbl_s = '\n'.join(temp_s[:-1])
+    tbl_s = '\n'.join(lines[:-1])
     tbl_s = tbl_s.replace('{llll}', '{llllll}').replace('\cline{1-4}\n', '').replace('\cline{2-4}\n', '\cline{4-6}\n')
-    tbl_s = tbl_s.replace(r'Dataset & Level & AUC &                       \\', r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} &                       \\')
+    tbl_s = tbl_s.replace(r'Dataset & Level & AUC &', r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} &')
     tbl_s = tbl_s.replace(' (screen-detected only)', r'\textsuperscript{1}')
 
     before = [r'\begin{table}[ht]', '\small', '\centering']
@@ -147,17 +161,35 @@ def format_latex_table(results, summary_tbl):
     temp_s[ix+21] = temp_s[ix+21][:re.search('ROC.*\\\\', temp_s[ix+21]).start()] + r'ROC & \multicolumn{1}{c}{-} \\'
     temp_s[ix+22] = temp_s[ix+22][:re.search('PR.*\\\\', temp_s[ix+22]).start()] + r'PR & \multicolumn{1}{c}{-} \\'
 
-    nums = [9, 10, 12, 13, 15, 16, 21, 22, 24, 25, 27, 28]
+    nums = [9, 10, 12, 13, 15, 16, 21, 22, 24, 25, 27, 28, 30, 31, 33, 34]
     nums = [n + 1 for n in nums]
     for i in nums:
         temp_s[i] = temp_s[i].replace(r' \\', r' & \multicolumn{1}{c}{-} \\')
+
+    temp_s.insert(-2, r'\textsuperscript{1} screen-detected cancers only}')
+    if temp_s[-8] == '\\cline{1-4} \\cline{4-6}':
+        temp_s.pop(-8)
+
+    temp_s.insert(3, r'\def\arraystretch{1.075}')
+
     tbl_s = '\n'.join(temp_s)
     tbl_s = tbl_s.replace('{llllll}', '{lllllll}').replace(r'-6}', r'-7}')
-    tbl_s = tbl_s.replace(r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} &                       \\', r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} & \textbf{BRAIx} & \textbf{GMIC}   \\')
+    tbl_s = tbl_s.replace(r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} &', r'\textbf{Dataset} & \textbf{Episodes} & & & \textbf{AUC} & \textbf{BRAIx} & \textbf{GMIC}')
     tbl_s = tbl_s.replace(r'\midrule', r'\specialrule{.4pt}{2pt}{0pt}').replace(r'\bottomrule', r'\specialrule{.8pt}{0pt}{2pt}')
+    tbl_s = tbl_s.replace(r'\caption{}', r'\caption{Results of testing the AI reader on external datasets, 95\% confidence interval calculated using 2,000 bootstrap replicates. \newline')
+
+    tbl_s = tbl_s.replace(r'\cline{1-4} \cline{4-7}', r'\cline{2-7}')
+    tbl_s = tbl_s.replace(r'\multirow[t]', r'\multirow')
 
     print(tbl_s)
 
 
 if __name__ == "__main__":
-    main()
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--base_path', type=Path, default=Path.cwd(), help='base path for input files')
+    parser.add_argument('--seed', default=9837452, type=int)
+    parser.add_argument('-n', default=2000, type=int, help='number of bootstrap samples')
+    args = parser.parse_args()
+
+    main(args)
