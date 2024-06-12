@@ -22,8 +22,8 @@ root
     - Run `renv::restore()` to install all the packages needed for the analysis (as specified in `renv.lock`).
 
 
-1. The main file for the simulation is `main.R`. 
-    - Run the R file line by line to get the simulation results. The output are R objects, plots and generated LaTeX code. Most intermediate results are saved in the `output/` folder, and they can be loaded and examined using the `readRDS` function. The plots are for checking the simulation results, the production version as seen in the manuscript is generated using Python.
+1. The main file for the simulation is `main.ipynb`. 
+    - Run the file cell by cell to get the simulation results. The recommended execution order is provided in `flow-diagram.png`. The output are R objects, plots and generated LaTeX code. Most intermediate results are saved in the `output/` folder, and they can be loaded and examined using the `readRDS` function. The plots are for checking the simulation results, the production version as seen in the manuscript is generated using Python.
 
     - The example data are provided in `data/` folder (in .CSV format) and in the `output/` folder (in .RDS format). The entire example data are randomly generated and are for pipeline testing purposes only. Note that ROC curves may look rough because of the small sample size.
 

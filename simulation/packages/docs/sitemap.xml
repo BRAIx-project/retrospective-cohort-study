@@ -16,6 +16,9 @@
     <loc>/index.html</loc>
   </url>
   <url>
+    <loc>/readme.html</loc>
+  </url>
+  <url>
     <loc>/reference/AI_adaptive_reader.html</loc>
   </url>
   <url>
@@ -25,13 +28,37 @@
     <loc>/reference/AI_autonomous_screening_practical.html</loc>
   </url>
   <url>
+    <loc>/reference/AI_band_pass_audit.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_audit_all_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_drift.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_drift_quantile_threshold.html</loc>
+  </url>
+  <url>
     <loc>/reference/AI_band_pass_independent.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_learn.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_learn_all_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_risk.html</loc>
   </url>
   <url>
     <loc>/reference/AI_band_pass_screening.html</loc>
   </url>
   <url>
     <loc>/reference/AI_band_pass_screening_ms.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_band_pass_template.html</loc>
   </url>
   <url>
     <loc>/reference/AI_baseline_check.html</loc>
@@ -41,6 +68,21 @@
   </url>
   <url>
     <loc>/reference/AI_independent.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_audit.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_drift.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_drift_quantile_threshold.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_interaction.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_learn.html</loc>
   </url>
   <url>
     <loc>/reference/AI_independent_random_mixed_sim_economics.html</loc>
@@ -79,13 +121,58 @@
     <loc>/reference/AI_independent_replace_random_second_reader_arbitrator.html</loc>
   </url>
   <url>
+    <loc>/reference/AI_independent_risk.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_independent_template.html</loc>
+  </url>
+  <url>
     <loc>/reference/AI_masai.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_audit_AI.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_audit_AI_all_paths.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_audit_AI_all_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_drift.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_learn_from_AI.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_learn_from_AI_all_paths.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_learn_from_AI_all_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_risk.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_masai_template.html</loc>
   </url>
   <url>
     <loc>/reference/AI_reader.html</loc>
   </url>
   <url>
     <loc>/reference/AI_replacement_2_and_3.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_sequential.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_single.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_single_audit.html</loc>
+  </url>
+  <url>
+    <loc>/reference/AI_single_learn.html</loc>
   </url>
   <url>
     <loc>/reference/BRAIxMOP.html</loc>
@@ -95,6 +182,9 @@
   </url>
   <url>
     <loc>/reference/admani_reader.html</loc>
+  </url>
+  <url>
+    <loc>/reference/apply_manufacturer_quantile_threshold.html</loc>
   </url>
   <url>
     <loc>/reference/apply_manufacturer_threshold.html</loc>
@@ -160,6 +250,12 @@
     <loc>/reference/correction_reader.html</loc>
   </url>
   <url>
+    <loc>/reference/corrective_merge_two_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/err_merge_two_readers.html</loc>
+  </url>
+  <url>
     <loc>/reference/final_pass_economics.html</loc>
   </url>
   <url>
@@ -179,6 +275,9 @@
   </url>
   <url>
     <loc>/reference/get_consensus_performance.html</loc>
+  </url>
+  <url>
+    <loc>/reference/get_manufacturer_quantile_threshold.html</loc>
   </url>
   <url>
     <loc>/reference/get_reader_performance.html</loc>
@@ -235,6 +334,15 @@
     <loc>/reference/prepare_data_for_simulation.html</loc>
   </url>
   <url>
+    <loc>/reference/random_reader.html</loc>
+  </url>
+  <url>
+    <loc>/reference/reader_auditing_ai.html</loc>
+  </url>
+  <url>
+    <loc>/reference/reader_learning_from_ai.html</loc>
+  </url>
+  <url>
     <loc>/reference/reader_n3.html</loc>
   </url>
   <url>
@@ -271,7 +379,16 @@
     <loc>/reference/scenario_summary.html</loc>
   </url>
   <url>
+    <loc>/reference/sequential_merge_two_readers.html</loc>
+  </url>
+  <url>
+    <loc>/reference/sequential_soft_merge_two_readers.html</loc>
+  </url>
+  <url>
     <loc>/reference/simulated_reader.html</loc>
+  </url>
+  <url>
+    <loc>/reference/simulated_reader_with_ai_interaction.html</loc>
   </url>
   <url>
     <loc>/reference/yellow.html</loc>

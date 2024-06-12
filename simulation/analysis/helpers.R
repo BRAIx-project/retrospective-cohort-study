@@ -20,22 +20,23 @@ reader_roc <- function(reader_perf, model_pred) {
   require(dplyr)
   require(magrittr)
   require(tidyr)
-  sroc_plot <- function(res_df) {
+  sroc_plot <- function(res_df, make_plot = FALSE) {
     sroc <- mada::reitsma(res_df)
     bound <- c(min(res_df$FPR), max(res_df$FPR))
     srocmat <- mada::sroc(sroc, type = "ruttergatsonis")
-
-    plot(c(0, 1), c(0,1),
-         main = glue::glue("Summary ROC of {nrow(res_df)} radiologists VS Empirical ROC of AI"),
-         ylab = "Sensitivities",
-         xlab = "1 - Specificities",
-         type = 'n')
-    abline(v = seq(0, 1, 0.05), h = seq(0, 1, 0.05), col = 'lightgray', lty = 3)
-    points(res_df$FPR, res_df$TPR)
-
     srocmat <- rbind(c(0, 0), srocmat)
-    lines(srocmat[,1], srocmat[,2], col = "lightgreen", lwd = 2)
-    lines(srocmat[cut(srocmat[, 1], bound, "withinbound") == "withinbound", ], col = "darkgreen", lwd = 2)
+
+    if (make_plot) {
+      plot(c(0, 1), c(0,1),
+           main = glue::glue("Summary ROC of {nrow(res_df)} radiologists VS Empirical ROC of AI"),
+           ylab = "Sensitivities",
+           xlab = "1 - Specificities",
+           type = 'n')
+      abline(v = seq(0, 1, 0.05), h = seq(0, 1, 0.05), col = 'lightgray', lty = 3)
+      points(res_df$FPR, res_df$TPR)
+      lines(srocmat[,1], srocmat[,2], col = "lightgreen", lwd = 2)
+      lines(srocmat[cut(srocmat[, 1], bound, "withinbound") == "withinbound", ], col = "darkgreen", lwd = 2)
+    }
 
     list(sroc = sroc, bound = bound, fitted_values = srocmat)
   }
@@ -65,7 +66,7 @@ reader_roc <- function(reader_perf, model_pred) {
   res_df <- do.call(rbind, res) |>
     mutate(n_reads = P + N) |>
     filter(n_reads > quantile(n_reads, 0.1))
-  sroc_curve <- sroc_plot(res_df)
+  sroc_curve <- sroc_plot(res_df, make_plot = TRUE)
 
   write.csv(res_df, output("radiologists_performance.csv"), row.names = FALSE)
   write.csv(sroc_curve$fitted_values, output("radiologists_sroc.csv"))
@@ -158,8 +159,9 @@ reader_roc <- function(reader_perf, model_pred) {
 masai_correct <- function(res, prop) {
   single_read_df <- res |> dplyr::filter(by == "reader-1" | by == "reader-2")
   dbl_thd_read_df <- res |> dplyr::filter(by == "reader-1-and-2" | by == "reader-3")
+  as_cancer <- \(x) 1.0 * (x %in% c(1, 2))
 
-  miss_ind <- which(single_read_df$episode_outcome != single_read_df$episode_prediction)
+  miss_ind <- which(as_cancer(single_read_df$episode_outcome) != single_read_df$episode_prediction)
   corr_ind <- sample(miss_ind, floor(length(miss_ind) * prop))
 
   modified_single_read <- single_read_df
@@ -198,6 +200,106 @@ solve_equivalent <- function(res_masai, res_baseline, seed) {
     (tnr - target_tnr)
   }
   uniroot(f, c(0, 1), seed = seed)
+}
+
+
+masai_incorrect <- function(res, prop) {
+  single_read_df <- res |> dplyr::filter(by == "reader-1" | by == "reader-2")
+  dbl_thd_read_df <- res |> dplyr::filter(by == "reader-1-and-2" | by == "reader-3")
+  as_cancer <- \(x) 1.0 * (x %in% c(1, 2))
+
+  hit_ind <- which(as_cancer(single_read_df$episode_outcome) == single_read_df$episode_prediction)
+  err_ind <- sample(hit_ind, floor(length(hit_ind) * prop))
+
+  modified_single_read <- single_read_df
+  modified_single_read$episode_prediction[err_ind] <- 1 - modified_single_read$episode_prediction[err_ind]
+
+  res['episode_id'] |>
+    dplyr::left_join(rbind(modified_single_read, dbl_thd_read_df),
+                     by = "episode_id")
+}
+
+masai_incorrect_perf <- function(res_masai, p) {
+  res_masai_incorrect <- masai_incorrect(res_masai, p)
+  data.frame(scenario_summary(res_masai_incorrect)$performance)
+}
+
+masai_incorrect_econ <- function(res_masai, p) {
+  res_masai_incorrect <- masai_incorrect(res_masai, p)
+  data.frame(t(unlist(
+    BRAIxMOP:::masai_economics(scenario_summary(res_masai_incorrect))
+  )))
+}
+
+masai_incorrect_tbl <- function(res_masai, ps, f = masai_incorrect_perf, seed) {
+  results <- masai_correct_tbl(res_masai, ps, f, seed)
+  results[, "corr_prop"] <- -1 * results[, "corr_prop"]
+  results
+}
+
+
+masai_correct_by_ai <- function(res, prop, model_tdf) {
+  stopifnot(length(unique(model_tdf$episode_prediction)) <= 2)
+  single_read_df <- res |> dplyr::filter(by == "reader-1" | by == "reader-2")
+  dbl_thd_read_df <- res |> dplyr::filter(by == "reader-1-and-2" | by == "reader-3")
+  as_cancer <- \(x) 1.0 * (x %in% c(1, 2))
+
+  temp <- single_read_df |>
+    left_join(model_tdf |>
+                select(episode_id, episode_prediction) |>
+                rename(ai_prediction = episode_prediction),
+              by = "episode_id")
+
+  miss_ind <- which(temp$episode_prediction != temp$ai_prediction
+                    & temp$ai_prediction == as_cancer(temp$episode_outcome))
+  corr_ind <- sample(miss_ind, floor(length(miss_ind) * prop))
+
+  modified_single_read <- single_read_df
+  modified_single_read$episode_prediction[corr_ind] <- 1 - modified_single_read$episode_prediction[corr_ind]
+
+  res['episode_id'] |>
+    dplyr::left_join(rbind(modified_single_read, dbl_thd_read_df),
+                     by = "episode_id")
+}
+
+masai_incorrect_by_ai <- function(res, prop, model_tdf) {
+  stopifnot(length(unique(model_tdf$episode_prediction)) <= 2)
+  single_read_df <- res |> dplyr::filter(by == "reader-1" | by == "reader-2")
+  dbl_thd_read_df <- res |> dplyr::filter(by == "reader-1-and-2" | by == "reader-3")
+  as_cancer <- \(x) 1.0 * (x %in% c(1, 2))
+
+  temp <- single_read_df |>
+    left_join(model_tdf |>
+                select(episode_id, episode_prediction) |>
+                rename(ai_prediction = episode_prediction),
+              by = "episode_id")
+  hit_ind <- which(temp$episode_prediction != temp$ai_prediction
+                   & temp$ai_prediction != as_cancer(temp$episode_outcome))
+  err_ind <- sample(hit_ind, floor(length(hit_ind) * prop))
+
+  modified_single_read <- single_read_df
+  modified_single_read$episode_prediction[err_ind] <- 1 - modified_single_read$episode_prediction[err_ind]
+
+  res['episode_id'] |>
+    dplyr::left_join(rbind(modified_single_read, dbl_thd_read_df),
+                     by = "episode_id")
+}
+
+
+apply_manufacturer_quantile_threshold <- function(model_df, q) {
+  require(tidyr)
+  result <- model_df |>
+    group_by(manufacturer) |>
+    nest() |>
+    mutate(data = purrr::map(data, function(df0) {
+      thr <- quantile(df0$episode_prediction, q)
+      df0$episode_prediction <- 1.0 * (df0$episode_prediction > thr)
+      df0
+    })) |>
+    unnest(cols = c(data)) |>
+    ungroup()
+
+  result[colnames(model_df)] |> arrange(episode_id)
 }
 
 
@@ -758,8 +860,8 @@ masai_curve <- function(qs = seq(0, 0.99, 0.01)) {
   env$i <- 0
   res <- do.call(rbind, lapply(qs, function(s) {
     env$i <- env$i + 1
-    masai_threshold <- quantile(model_df$episode_prediction, s)
-    res_masai <- AI_masai(accession_df, reader_df, model_df, masai_threshold)
+    model_tdf <- apply_manufacturer_quantile_threshold(model_df, s)
+    res_masai <- AI_masai(accession_df, reader_df, model_tdf, s)
     res_masai_econ <- BRAIxMOP:::masai_economics(scenario_summary(res_masai))
     setTxtProgressBar(pb, env$i)
     unlist(res_masai_econ)
@@ -1251,7 +1353,7 @@ run_test <- function(paired) {
 
 
 # Testing consistency between client split and prospective splits (both w.r.t. radiologists) ----
-# Comparison against radiologists performance
+# Comparison against radiologists performance ----
 mutate_performance <- function(df0) {
   df0 |>
     mutate(episode_is_cancer = episode_outcome %in% c(1, 2),
@@ -1394,4 +1496,195 @@ test_prospective_split_against_radiologists <- function(model_df, reader_df, see
   spec <- paired_episode_df |> spec_matrix()
 
   list(data = paired_episode_df, sens_tbl = sens, spec_tbl = spec)
+}
+
+roc_permutation_test <- function(mdf, mdf2, n_iter = 1000) {
+  nr1 <- nrow(mdf)
+  nr2 <- nrow(mdf2)
+  joined_df <- rbind(mdf, mdf2)
+  s <- sample(nr1 + nr2)
+  mdf[s]
+
+}
+
+
+
+
+# Extension: Reader replacement - human-AI interaction -------------------------
+#' Simulation of human-AI interaction under the reader replacement scenario
+#' @param sim_res The reader replacement simulation result
+#' @param prop Proportion to correct ; 0.1 refers to increasing the number of correct
+#' predictions by 10%, whereas -0.1 refers to increasing the number of wrong predictions
+#' by 10%.
+#' @param seed An integer; the random seed.
+#' @param baseline_econ The baseline economics performance.
+# @examples
+# print(result$system_performance)
+# modified <- reader_replacement_human_ai_interaction(result, 0.1, baseline_econ = res_baseline_econ, seed = 1234)
+# print(modified$system_performance)
+AI_replacement_human_ai_interaction <- function(sim_res, prop, seed, baseline_econ) {
+  as_cancer <- \(x) 1.0 * (x %in% c(1, 2))
+
+  if (!missing(seed)) set.seed(seed)
+  df0 <- sim_res$system_summary$result
+
+  third_read_idx <- which(df0$by == "sim-reader-3")
+  if (prop >= 0) {
+    # find the wrong prediction and correct them later
+    target_idx <- which(as_cancer(df0$episode_outcome) != df0$episode_prediction)
+  } else {
+    # find the right prediction and turn them into mistakes later
+    target_idx <- which(as_cancer(df0$episode_outcome) == df0$episode_prediction)
+  }
+
+  mod_idx <- intersect(third_read_idx, target_idx)
+  sample_mod_idx <- sample(mod_idx, round(length(mod_idx) * abs(prop)), replace = FALSE)
+
+  df0$episode_prediction[sample_mod_idx] <- 1 - df0$episode_prediction[sample_mod_idx]
+  # print(df0[sample_mod_idx, ])
+
+  # Setup
+  scenario_flowchart <- BRAIxMOP:::independent_flowchart
+  scenario_flowchart_data <- BRAIxMOP:::independent_flowchart_data
+  flowchart_label <- c("Reader 1", "AI Reader", "Reader 3")
+  scenario_econ <- BRAIxMOP:::AI_independent_random_reader_economics
+  table_label <- "AI reader replacement"
+
+  # System wise performance
+  system_summary <- scenario_summary(df0)
+  system_performance <- data.frame(system_summary$performance)
+
+  # Flowchart
+  device <- animate::animate$new(1000, 800, virtual = TRUE)
+  scenario_flowchart(device, scenario_flowchart_data(system_summary), flowchart_label)
+  system_flowchart <- animate::rmd_animate(device, options = animate::click_to_loop())
+
+  # Economics table
+  system_econ <- scenario_econ(system_summary)
+  system_econ_table <- BRAIxMOP:::diff_baseline(baseline_econ, system_econ)|>
+    BRAIxMOP:::diff_table(table_label)
+
+  list(
+    system_summary = system_summary,
+    system_performance = system_performance,
+    system_flowchart = system_flowchart,
+    system_econ = system_econ,
+    system_econ_table = system_econ_table
+  )
+}
+
+
+#' Reader replacement - human-AI interaction (bootstrap)
+# @examples
+# modified <- AI_replacement_human_ai_interaction_bootstrap(
+#   props = seq(-1, 1, 0.2),
+#   accession_df = accession_df,
+#   reader_df = reader_df,
+#   model_df = model_df,
+#   threshold = ai_performance$threshold,
+#   custom = c(emp_fpr_3rd, emp_tpr_3rd, emp_tpr_3rd, emp_fpr_3rd, emp_fpr_3rd),
+#   bootstrap_n = 5,
+#   seed = 1234,
+#   run_parallel = FALSE
+# )
+AI_replacement_human_ai_interaction_bootstrap <- function(props,
+                                                          bootstrap_n = 1000,
+                                                          seed = 1234,
+                                                          run_parallel = FALSE,
+                                                          mc.cores = 2, ...) {
+  run_fun <- run_AI_replacement
+
+  # Set multi-core
+  set_lapply <- function(run_parallel = FALSE, mc.cores = 2) {
+    ifelse(run_parallel,
+           function(...) parallel::mclapply(mc.cores = mc.cores, ...),
+           lapply)
+  }
+  lapply2 <- set_lapply(run_parallel, mc.cores)
+
+  # Setup
+  if (!missing(seed)) set.seed(seed)
+
+  n <- bootstrap_n
+  if (n > 10000000) {
+    stop("The number of bootstrap is too large: bootstrap_n > 10^7.")
+  }
+
+  multiple_runs_seed <- c(seed, sample(10000000, n - 1))
+  tracker <- new.env()
+  tracker$run <- 1
+
+  args <- list(...)
+  args$baseline_result <- run_baseline(args$accession_df, args$reader_df)
+
+  # Main loop
+  message("Begin main loop")
+  multiple_runs <- multiple_runs_seed |>
+    lapply2(function(seed) {
+      print(glue::glue("Run: {tracker$run} / {n}"))
+      tracker$run <- tracker$run + 1
+      args$seed <- seed
+      result <- do.call(run_fun, args)
+
+      # Post-process the correction here to avoid repeating the entire bootstrap
+      # simulation many times as they are computationally expensive to evaluate
+      lapply2(props, function(prop) {
+        modified <- AI_replacement_human_ai_interaction(result, prop, seed = seed,
+                                                        baseline_econ = args$baseline_result$econ)
+        list(performance = modified$system_performance,
+             econ = unlist(modified$system_econ),
+             summary = BRAIxMOP:::get_flowchart_reads(modified$system_summary$summary),
+             summary_by_outcome = BRAIxMOP:::get_outcome_reads(
+               modified$system_summary$summary_by_outcome
+             ))
+      })
+    })
+
+
+  # Create and save summary
+  message("Tidy results")
+  nested_multiple_runs_summary <- lapply(seq_along(props), function(i) {
+    local_multiple_runs <- multiple_runs |> lapply(\(x) x[[i]])
+
+    multiple_runs_summary <- names(local_multiple_runs[[1]]) |>
+      lapply(\(key) {
+        dfs <- lapply(local_multiple_runs, \(x) x[[key]])
+        has_same_number_of_columns <- length(unique(sapply(dfs, ncol))) == 1
+        if (!has_same_number_of_columns) {
+          common_columns <- Reduce(union, Map(colnames, dfs))
+          for (i in seq_along(dfs)) {
+            dfs[[i]] <- as.data.frame(dfs[[i]])
+            missing_columns <- setdiff(common_columns, colnames(dfs[[i]]))
+            dfs[[i]][missing_columns] <- 0
+            dfs[[i]] <- dfs[[i]][common_columns]
+          }
+        }
+        do.call(rbind, dfs)
+      }) |>
+      setNames(names(local_multiple_runs[[1]]))
+
+    # Return results
+    multiple_runs_summary
+  })
+
+  nested_multiple_runs_summary
+}
+
+
+
+# Some utility functions ----
+multiple_seeded_runs <- function(x, seeds, quietly = TRUE) {
+  pb <- txtProgressBar(0, length(seeds), style = 3)
+  context <- ifelse(quietly, suppressMessages, identity)
+  lapply(seq_along(seeds), function(i) {
+    seed <- seeds[i]
+    set.seed(seed)
+    result <- context(eval(x))  # This assumes "helpers.R" is sourced in the global
+    setTxtProgressBar(pb, i)
+    result
+  })
+}
+
+do_rbind <- function(xs) {
+  do.call(rbind, xs)
 }
